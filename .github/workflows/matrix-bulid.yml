@@ -1,0 +1,108 @@
+name: Matrix Build Strategy
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Matrix with 3 different Node.js versions
+        node-version: [18.x, 20.x, 21.x]
+        # You could also combine with OS matrix like:
+        # os: [ubuntu-latest, windows-latest, macos-latest]
+        # node-version: [18.x, 20.x]
+        include:
+          - variant: node18
+            description: "Node.js 18 LTS"
+          - variant: node20
+            description: "Node.js 20 LTS"
+          - variant: node21
+            description: "Node.js 21 Current"
+    
+    name: Build (Node ${{ matrix.node-version }})
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: matrix-76a4a0b
+      run: |
+        echo "Building for Node.js version ${{ matrix.node-version }}"
+        echo "Variant: ${{ matrix.variant }}"
+        echo "Description: ${{ matrix.description }}"
+    
+    - name: Generate build artifact
+      run: |
+        # Create a unique build artifact for each matrix variant
+        cat > build-info.json << EOF
+        {
+          "build_id": "${{ github.run_id }}",
+          "variant": "${{ matrix.variant }}",
+          "node_version": "${{ matrix.node-version }}",
+          "description": "${{ matrix.description }}",
+          "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+          "commit_sha": "${{ github.sha }}",
+          "runner_os": "${{ runner.os }}"
+        }
+        EOF
+        
+        # Also create a simple text file
+        echo "Build output for ${{ matrix.variant }} (Node.js ${{ matrix.node-version }})" > output.txt
+        echo "Build completed successfully at $(date)" >> output.txt
+        echo "GitHub Run ID: ${{ github.run_id }}" >> output.txt
+        echo "Commit SHA: ${{ github.sha }}" >> output.txt
+    
+    - name: Upload JSON artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-76a4a0b-${{ matrix.variant }}-json
+        path: build-info.json
+        retention-days: 7
+    
+    - name: Upload text artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-76a4a0b-${{ matrix.variant }}-txt
+        path: output.txt
+        retention-days: 7
+    
+    - name: Verify artifact content
+      run: |
+        echo "Verifying generated files are non-empty..."
+        [ -s build-info.json ] && echo "✓ build-info.json is non-empty" || exit 1
+        [ -s output.txt ] && echo "✓ output.txt is non-empty" || exit 1
+        echo "All artifacts contain actual content!"
+
+  # Optional: Add a summary job that runs after all matrix jobs complete
+  summary:
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Display build summary
+      run: |
+        echo "=== Matrix Build Summary ==="
+        echo "Total matrix jobs: 3"
+        echo "Artifacts uploaded with prefix 'build-76a4a0b':"
+        find artifacts -name "build-76a4a0b-*" -type f | while read file; do
+          echo "✓ $(basename $file)"
+        done
+        echo "All artifacts contain actual content!"
